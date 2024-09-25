@@ -31,7 +31,7 @@ class UsersController extends Controller
       }
     $data = $request->all();
     $data['password'] = Hash::make($data['password']);
-    $data['is_admin'] = true;
+    $data['is_admin'] = false;
     $data['api_token'] = Str::random(60);
 
     $user = User::create($data);
@@ -57,14 +57,66 @@ class UsersController extends Controller
 
     public function index(){
         // return response(['data'=>User::get()]);
-      return  User::all();
+        $auth_user = request()->get('auth_user')->first();
+        if($auth_user['is_admin']){
+            return response(['data'=>User::get()]);
+            // return  User::all();
+        }
+        return response(['message'=>'Unauthorized user']);
     }
 
     public function show($id){
+        $auth_user = request()->get('auth_user')->first();
         $user = User::find($id);
-        if(!is_null($user)){
+
+        if($auth_user['is_admin']){
+            if(!is_null($user)){
+                return response(['data'=>$user]);
+            }else{
+                return response(['message'=>'User not found!']);
+            }
+        }elseif($auth_user['id']==$id){
             return response(['data'=>$user]);
+        }else{
+            return response(['message'=>'Unauthorized!']);
         }
-        return response()->json(['message'=>'User not found!'],404);
+    }
+
+    public function update(Request $request,$id){
+        $rules=[
+            'name'=>'string|min:2|max:255',
+            'email'=>'email|max:255|unique:users,email,'.$id,
+            'password'=>'string|min:6|max:12|confirmed'
+        ];
+        $validator = Validator::make($request->all(),$rules);
+
+        if($validator->fails()){
+            return response(['message'=>$validator->errors()]);
+        }
+        $auth_user = request()->get('auth_user')->first();
+        $user = User::find($id);
+
+        if(!is_null($user)){
+            if($auth_user['id']==$id){
+                $user->update($request->only(['name','email','password']));
+                return response(['data'=>$user]);
+            }else{
+                return response(['message'=>'Unauthorized user!']);
+            }
+        }
+        return response(['message'=>'User not found!']);
+    }
+
+    public function destroy($id){
+        $user = User::find($id);
+        $auth_user = request()->get('auth_user')->first();
+        if(is_null($user)){
+            return response(['message'=>'User not found!']);
+        }
+        if($auth_user['id']==$id){
+            $user->delete();
+            return response(['message'=>'User deleted!']);
+        }
+        return response(['message'=>'Unauthorized user!']);
     }
 }   
